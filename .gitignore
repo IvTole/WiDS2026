@@ -3,6 +3,13 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Data
+data/WiDSWorldWide_GlobalDathon26.zip 
+data/test.csv
+data/metaData.csv
+data/train.csv
+data/sample_submission.csv
+
 # C extensions
 *.so
 
