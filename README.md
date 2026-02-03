@@ -32,6 +32,36 @@ Este repositorio contiene el trabajo para la competencia **WiDS (Women in Data S
 
 Los datos se descargarán en la carpeta `/data` del proyecto.
 
+## Estructura del Proyecto
+
+```
+WiDS2026/
+├── data/                           # Aquí van los datos de la competencia de Kaggle
+│   ├── train.csv                   # Conjunto de datos de entrenamiento
+│   ├── test.csv                    # Conjunto de datos de prueba
+│   ├── sample_submission.csv       # Formato de envío de ejemplo
+│   └── metaData.csv                # Metadatos del dataset
+├── notebooks/                      # Jupyter notebooks para análisis
+├── src/                           # Código fuente del proyecto
+│   ├── __init__.py
+│   ├── config.py                  # Configuraciones y constantes
+│   ├── io.py                      # Carga y manejo de datos
+│   ├── targets.py                 # Procesamiento de variables objetivo
+│   ├── evaluation.py              # Entrenamiento y evaluación de modelos
+│   └── tracking.py                # Tracking con MLflow
+├── train.py                       # Script principal de entrenamiento
+└── README.md                      # Documentación del proyecto
+```
+
+### Descripción de Scripts
+
+- **`train.py`**: Script principal que ejecuta el pipeline completo de entrenamiento y evaluación de modelos
+- **`src/config.py`**: Define rutas de datos, columnas, parámetros y configuraciones del proyecto
+- **`src/io.py`**: Contiene la clase `Dataset` para cargar y procesar los datos de entrenamiento y prueba
+- **`src/targets.py`**: Funciones para crear etiquetas multiclase a partir de datos de supervivencia
+- **`src/evaluation.py`**: Clase `ModelEvaluation` para evaluar modelos con métricas y visualizaciones
+- **`src/tracking.py`**: Decoradores y funciones para el seguimiento de experimentos con MLflow
+
 # Reglas de uso de Git para el proyecto
 Para asegurar un flujo de trabajo organizado y eficiente, todos los estudiantes deben seguir estas reglas de uso de git al contribuir al proyecto.
 
