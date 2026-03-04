@@ -6,7 +6,7 @@ from sklearn.linear_model import LogisticRegression
 
 def main():
     start_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print("Start date and time : ", start_datetime)
+    print("Start Date and Time : ", start_datetime)
 
     data = Dataset()
     X_train, y_train, X_test = data.load_data_xy() # Loads train and test dataset (X feature matrix and y target matrix)
