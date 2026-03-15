@@ -63,6 +63,6 @@ class ModelEvaluation:
         if len(int_cols) > 0:
             X_sig[int_cols] = X_sig[int_cols].astype("float64")
         signature = infer_signature(X_sig, model.predict(X_sig))
-        mlflow.sklearn.log_model(model, name=model_name, signature=signature)
+        mlflow.sklearn.log_model(model, name=model_name, signature=signature, registered_model_name=None)
 
         return acc
