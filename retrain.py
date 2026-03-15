@@ -17,6 +17,8 @@ def main(model_id: str, tag: str):
     data = Dataset()
     X_train, y_train, _ = data.load_data_xy()
     print(f"Retraining on: {X_train.shape[0]} samples.")
+    model.fit(X_train, y_train)
+    print(f"Retrained on {X_train.shape[0]} samples.")
 
     # Model registry
     model_type = type(model.named_steps["model"]).__name__
@@ -35,7 +37,6 @@ if __name__ == "__main__":
     # cli arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-id", required=True) # e.g. m-0d9ed811fd3546c69228f636ffd1504b
-    parser.add_argument("--artifact-name", required=True) # e.g. pipeline_lr
     parser.add_argument("--tag", required=True) # e.g. lr_stdscaler, algo de contexto, incluido apellido de estudiante
     args = parser.parse_args()
 
