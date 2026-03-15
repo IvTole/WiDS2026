@@ -41,15 +41,18 @@ WiDS2026/
 │   ├── test.csv                    # Conjunto de datos de prueba
 │   ├── sample_submission.csv       # Formato de envío de ejemplo
 │   └── metaData.csv                # Metadatos del dataset
-├── notebooks/                      # Jupyter notebooks para análisis
+├── notebooks/                      # Jupyter notebooks para análisis exploratorio
 ├── src/                           # Código fuente del proyecto
 │   ├── __init__.py
-│   ├── config.py                  # Configuraciones y constantes
-│   ├── io.py                      # Carga y manejo de datos
+│   ├── config.py                  # Rutas, columnas, parámetros, y configuraciones de mlflow
+│   ├── io.py                      # Clase Dataset para carga y preprocesamiento de datos
+│   ├── preprocessing.py           # ColumnTransformer con escalado y passthrough
 │   ├── targets.py                 # Procesamiento de variables objetivo
-│   ├── evaluation.py              # Entrenamiento y evaluación de modelos
-│   └── tracking.py                # Tracking con MLflow
-├── train.py                       # Script principal de entrenamiento
+│   ├── evaluation.py              # Entrenamiento y evaluación de modelos, Clase ModelEvaluation
+│   └── tracking.py                # Tracking con MLflow, decorador mlflow_logger para manejo de runs
+├── train.py                       # Script de entrenamiento y experimentación: entrena y evalúa modelos con split training/validation
+├── retrain.py                       # Script de reentrenamiento: reentrena el modelo elegido con todos los datos del set de training
+├── predict.py                       # Script de inferencia: Haz una inferencia con un modelo entrenado y crea un archivo csv de submission para Kaggle
 └── README.md                      # Documentación del proyecto
 ```
 
@@ -61,6 +64,38 @@ WiDS2026/
 - **`src/targets.py`**: Funciones para crear etiquetas multiclase a partir de datos de supervivencia
 - **`src/evaluation.py`**: Clase `ModelEvaluation` para evaluar modelos con métricas y visualizaciones
 - **`src/tracking.py`**: Decoradores y funciones para el seguimiento de experimentos con MLflow
+
+## Flujo de trabajo
+
+El pipeline sigue tres etapas:
+
+### 1. Experimentación - `train.py`
+
+Entrena modelos con un split training/validation, y registra sus métricas, parámetros y artefactos en mlflow.
+
+```bash
+python train.py
+```
+
+### 2. Reentrenamiento - `retrain.py`
+
+Carga el modelo de tu elección del paso anterior desde mlflow (con un id del modelo), para ser reentrenado con el 100% de los datos de training. El script contempla dos flags (model-id, tag) que se tienen que colocar al correr el script en terminal.
+
+```bash
+python retrain.py --model-id <model_id> --tag <apellido_descripcion>
+```
+
+## 3. Inferencia - `predict.py`
+
+Carga el modelo de producción del paso anterior y genera predicciones, para construir un archivo de submission para kaggle.
+
+```bash
+python predict.py --model-id <model_id> --output-name <nombre del archivo de salida, default "submission">
+```
+
+El archivo resultante puede subirse directamente a kaggle para que te regresen un score.
+
+
 
 # Reglas de uso de Git para el proyecto
 Para asegurar un flujo de trabajo organizado y eficiente, todos los estudiantes deben seguir estas reglas de uso de git al contribuir al proyecto.
