@@ -16,6 +16,9 @@ data/metaData.csv
 data/train.csv
 data/sample_submission.csv
 
+# Submissions
+submissions/*.csv
+
 # C extensions
 *.so
 
