@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 # External modules
 from src.config import train_data_path, test_data_path
-from src.config import FEATURE_COLUMNS, COL_EVENT, COL_TIME_TO_HIT_HOURS
+from src.config import FEATURE_COLUMNS, COL_EVENT, COL_TIME_TO_HIT_HOURS, COL_EVENT_ID
 from src.config import TIME_BINS_HOURS, N_CLASSES, CENSORED_CLASS
 from src.targets import make_multiclass_labels
 
@@ -50,8 +50,8 @@ class Dataset:
                                         censored_class=CENSORED_CLASS)
         
         # Drop old target columns
-        X_train = df_train.drop([COL_EVENT, COL_TIME_TO_HIT_HOURS], axis=1)
-        X_test = df_test
+        X_train = df_train.drop(columns=[COL_EVENT, COL_TIME_TO_HIT_HOURS, COL_EVENT_ID], axis=1)
+        X_test = df_test.drop(columns=[COL_EVENT_ID], axis=1)
 
         return X_train, y_train, X_test
 
