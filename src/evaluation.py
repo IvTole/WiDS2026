@@ -44,11 +44,13 @@ class ModelEvaluation:
         :param model: the model to evaluate
         :return: the accuracy score
         """
-        print("Model Type", type(model).__name__ + '_' + self.tag)
+        #print("Model Type", type(model).__name__ + '_' + self.tag)
+        model_type = type(model.named_steps['model']).__name__
+        print(f"Model Type: {model_type}")
         model.fit(self.X_train, self.y_train)
         y_pred = model.predict(self.X_valid)
         acc = accuracy_score(y_true=self.y_valid, y_pred=y_pred)
-        print(f"{model}: accuracy score: {acc:.2f}")
+        print(f"{model_type}: accuracy score: {acc:.2f}")
 
         # log parameters and metrics in MLFlow
         model_name = type(model).__name__ + '_' + self.tag
