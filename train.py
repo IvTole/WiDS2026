@@ -18,7 +18,7 @@ def main():
     pipeline_lr = Pipeline(
         [
             ("preprocessor", build_preprocessor()),
-            ("model", LogisticRegression(solver="lbfgs", max_iter=5000, penalty='elasticnet'))
+            ("model", LogisticRegression(solver="saga", max_iter=5000, penalty='elasticnet', l1_ratio=0.5))
         ]
     )
 
