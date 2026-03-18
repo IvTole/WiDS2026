@@ -6,7 +6,7 @@ def build_preprocessor() -> ColumnTransformer:
 
     preprocessor = ColumnTransformer(
         [
-            ("num", StandardScaler(), NUMERIC_COLS),
+            ("num", MinMaxScaler(), NUMERIC_COLS),
             ("pass", "passthrough", PASSTHROUGH_COLS)
         ]
     )
