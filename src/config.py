@@ -1,19 +1,15 @@
 # Paths, columns, seeds, bins
-
 from pathlib import Path
+import os
 
 # mlflow issues
-import os
 os.environ["MLFLOW_TRACKING_URI"] = "http://mlflow.vanotole-lab.com"
 os.environ["MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD"] = "false"
 
 # Paths
 def train_data_path() -> Path:
     """
-    Returns the location of train data directory, allowing for script executions in subfolders without worrying about the
-    relative location of the data
-
-    :return: the path to the train data directory
+    Returns the location of train data directory
     """
     cwd = Path.cwd()
     for folder in (cwd, cwd / "..", cwd / ".." / ".."):
@@ -25,10 +21,7 @@ def train_data_path() -> Path:
         
 def test_data_path() -> Path:
     """
-    Returns the location of test data directory, allowing for script executions in subfolders without worrying about the
-    relative location of the data
-
-    :return: the path to the test data directory
+    Returns the location of test data directory
     """
     cwd = Path.cwd()
     for folder in (cwd, cwd / "..", cwd / ".." / ".."):
@@ -156,10 +149,28 @@ COL_TIME_TO_HIT_HOURS = "time_to_hit_hours"
 COL_EVENT = "event"
 
 # Target parameters
-TIME_BINS_HOURS = [0, 12, 24, 48, 72]   # ejemplo
+TIME_BINS_HOURS = [0, 12, 24, 48, 72]
 N_CLASSES = 4
 CENSORED_CLASS = 3
 
-# MLFlow
+# MLFlow Configuration
 MLFLOW_TRACKING_URL = "http://mlflow.vanotole-lab.com"
 MLFLOW_EXPERIMENT_NAME = "WiDS2026"
+
+# --- CONFIGURACIÓN DE MODELOS (Contribución de Erick) ---
+# Cambia a "knn" para usar Vecinos Cercanos o "lr" para Regresión Logística
+SELECTED_MODEL = "knn" 
+
+MODEL_PARAMS = {
+    "knn": {
+        "n_neighbors": 5,
+        "weights": "distance",
+        "metric": "euclidean"
+    },
+    "lr": {
+        "solver": "saga",
+        "max_iter": 5000,
+        "penalty": "elasticnet",
+        "l1_ratio": 0.5
+    }
+}
