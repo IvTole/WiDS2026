@@ -7,6 +7,7 @@ import functools
 
 # Sklearn
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 # MLFlow
@@ -49,8 +50,23 @@ class ModelEvaluation:
         print(f"Model Type: {model_type}")
         model.fit(self.X_train, self.y_train)
         y_pred = model.predict(self.X_valid)
+        if hasattr(model, "predict_proba"):
+            y_prob = model.predict_proba(self.X_valid)
+        else:
+            y_prob = None
         acc = accuracy_score(y_true=self.y_valid, y_pred=y_pred)
-        print(f"{model_type}: accuracy score: {acc:.2f}")
+        f1 = f1_score(self.y_valid, y_pred, average="weighted")
+        roc_auc = None
+        if y_prob is not None:
+            try:
+                roc_auc = roc_auc_score(self.y_valid, y_prob, multi_class="ovr")
+            except:
+                roc_auc = None
+        print(f"{model_type}:")
+        print(f"  Accuracy: {acc:.3f}")
+        print(f"  F1-score: {f1:.3f}")
+        if roc_auc is not None:
+            print(f"  ROC-AUC: {roc_auc:.3f}")
 
         # log parameters and metrics in MLFlow
         model_name = type(model).__name__ + '_' + self.tag
@@ -58,6 +74,9 @@ class ModelEvaluation:
         for hyperparameter, value in model.get_params().items():
             log_param(hyperparameter, value)
         log_metric("accuracy_score", acc)
+        log_metric("f1_score", f1)
+        if roc_auc is not None:
+            log_metric("roc_auc", roc_auc)
 
         # Signature (avoid int for signature warning)
         X_sig = self.X_train.copy()
@@ -67,4 +86,8 @@ class ModelEvaluation:
         signature = infer_signature(X_sig, model.predict(X_sig))
         mlflow.sklearn.log_model(model, name=model_name, signature=signature, registered_model_name=None)
 
-        return acc
+        return {
+            "accuracy": acc,
+            "f1": f1,
+            "roc_auc": roc_auc
+        }
