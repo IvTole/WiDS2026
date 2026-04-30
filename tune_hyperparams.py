@@ -1,15 +1,17 @@
 """
 Hyperparameter tuning for multiple models.
-GridSearchCV for RandomForest, XGBoost, SVM, LogisticRegression, and KNN.
+HalvingGridSearchCV for RandomForest, XGBoost, SVM, LogisticRegression, and KNN.
 """
 
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import HalvingGridSearchCV, StratifiedKFold, train_test_split
+from sklearn.experimental import enable_halving_search_cv  # noqa
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import get_scorer
 import xgboost as xgb
 import mlflow
 import mlflow.sklearn
@@ -21,10 +23,10 @@ import json
 from datetime import datetime
 import os
 import time
+import argparse
 
 RANDOM_STATE = 42
 CV_FOLDS = 5
-SCORING = 'accuracy'  # Can be: 'accuracy', 'f1_weighted', 'roc_auc', etc.
 RESULTS_DIR = 'tuning_results'
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -34,8 +36,7 @@ PARAM_GRIDS = {
     'LogisticRegression': {
         'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
         'model__solver': ['lbfgs', 'saga'],
-        'model__penalty': ['l2', 'elasticnet'],
-        'model__max_iter': [1000, 5000]
+        'model__penalty': ['l2']
     },
     
     'RandomForest': {
@@ -73,7 +74,7 @@ PARAM_GRIDS = {
 # HELPER FUNCTIONS
 # ============================================================================
 
-def build_pipeline(model_name, model_instance):
+def build_pipeline(model_instance):
     """Build a pipeline with preprocessing plus the model."""
     pipeline = Pipeline([
         ('preprocessor', build_preprocessor()),
@@ -81,35 +82,17 @@ def build_pipeline(model_name, model_instance):
     ])
     return pipeline
 
-def log_results_to_mlflow(model_name, best_params, best_score, cv_results, elapsed_time):
-    """Log results in MLflow."""
-    
-    with mlflow.start_run(run_name=f"{model_name}_tuning"):
-        # Log parameters
-        for key, value in best_params.items():
-            if isinstance(value, (int, float, str, bool, type(None))):
-                mlflow.log_param(key, value)
-        
-        # Log metrics
-        mlflow.log_metric("best_score", best_score)
-        mlflow.log_metric("elapsed_time_seconds", elapsed_time)
-        
-        # Log full results as an artifact
-        results_df = pd.DataFrame(cv_results)
-        results_path = f"{RESULTS_DIR}/{model_name}_cv_results.csv"
-        results_df.to_csv(results_path, index=False)
-        mlflow.log_artifact(results_path)
-        
-        print(f"  ✓ Results logged in MLflow (run_id: {mlflow.active_run().info.run_id})")
-
-def tune_model(model_name, X_train, y_train):
+def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
     """
-    Tune hyperparameters for a single model.
+    Tune hyperparameters for a single model using HalvingGridSearchCV.
 
     Args:
         model_name: 'LogisticRegression', 'RandomForest', 'XGBoost', 'SVM', 'KNN'
         X_train: Training features
         y_train: Training target
+        X_val: Validation features for holdout evaluation
+        y_val: Validation target for holdout evaluation
+        scoring: Scoring metric
     Returns:
         dict with tuning results
     """
@@ -120,73 +103,104 @@ def tune_model(model_name, X_train, y_train):
     
     # Select model
     models = {
-        'LogisticRegression': LogisticRegression(random_state=RANDOM_STATE, solver='saga', max_iter=5000),
+        'LogisticRegression': LogisticRegression(random_state=RANDOM_STATE, max_iter=5000),
         'RandomForest': RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1),
-        'XGBoost': xgb.XGBClassifier(random_state=RANDOM_STATE, n_jobs=-1, eval_metric='logloss', verbose=0),
-        'SVM': SVC(random_state=RANDOM_STATE, probability=True),
-        'KNN': KNeighborsClassifier()
+        'XGBoost': xgb.XGBClassifier(random_state=RANDOM_STATE, n_jobs=-1, eval_metric='mlogloss', verbose=0),
+        'SVM': SVC(random_state=RANDOM_STATE),
+        'KNN': KNeighborsClassifier(n_jobs=-1)
     }
     
     model_instance = models[model_name]
-    pipeline = build_pipeline(model_name, model_instance)
+    pipeline = build_pipeline(model_instance)
     param_grid = PARAM_GRIDS[model_name]
     
-    search = GridSearchCV(
+    cv_strategy = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    
+    search = HalvingGridSearchCV(
         pipeline,
         param_grid=param_grid,
-        cv=CV_FOLDS,
-        scoring=SCORING,
+        cv=cv_strategy,
+        scoring=scoring,
         n_jobs=-1,
-        verbose=1
+        verbose=1,
+        random_state=RANDOM_STATE,
+        factor=3
     )
-    search_type = "GridSearchCV"
+    search_type = "HalvingGridSearchCV"
     
-    # Run search
-    start_time = time.time()
-    print(f"\n  Iniciando {search_type} con {CV_FOLDS} folds...")
-    search.fit(X_train, y_train)
-    elapsed_time = time.time() - start_time
-    
-    # Results
-    best_params = search.best_params_
-    best_score = search.best_score_
-    
-    print(f"\n  ✓ {search_type} completado en {elapsed_time:.2f}s")
-    print(f"  ✓ Mejor score ({SCORING}): {best_score:.4f}")
-    print(f"\n  Best parameters:")
-    for param, value in best_params.items():
-        print(f"    {param}: {value}")
-    
-    # Log in MLflow
-    log_results_to_mlflow(model_name, best_params, best_score, search.cv_results_, elapsed_time)
-    
+    with mlflow.start_run(run_name=f"{model_name}_tuning"):
+        # Log basic config
+        mlflow.log_param("search_type", search_type)
+        mlflow.log_param("scoring", scoring)
+        
+        # Run search
+        start_time = time.time()
+        print(f"\n  Iniciando {search_type} con {CV_FOLDS} folds...")
+        search.fit(X_train, y_train)
+        elapsed_time = time.time() - start_time
+        
+        # Results
+        best_params = search.best_params_
+        best_score = search.best_score_
+        best_model = search.best_estimator_
+
+        print(f"Mejor score CV ({scoring}): {best_score:.4f}")
+        print(f"\nBest parameters:")
+        for param, value in best_params.items():
+            print(f"{param}: {value}")
+            if isinstance(value, (int, float, str, bool, type(None))):
+                mlflow.log_param(param, value)
+                
+        # Evaluate on holdout set
+        scorer = get_scorer(scoring)
+        val_score = scorer(best_model, X_val, y_val)
+        print(f"Holdout Validation Score ({scoring}): {val_score:.4f}")
+        
+        # Log metrics
+        mlflow.log_metric("best_cv_score", best_score)
+        mlflow.log_metric("holdout_val_score", val_score)
+        mlflow.log_metric("elapsed_time_seconds", elapsed_time)
+        
+        # Log full results as an artifact
+        results_df = pd.DataFrame(search.cv_results_)
+        results_path = f"{RESULTS_DIR}/{model_name}_cv_results.csv"
+        results_df.to_csv(results_path, index=False)
+        mlflow.log_artifact(results_path)
+        
+        # Log model inside the correct MLflow run
+        mlflow.sklearn.log_model(best_model, f"{model_name}_best_model")
+        
+        print(f"  Results and model logged in MLflow (run_id: {mlflow.active_run().info.run_id})")
+        
     return {
         'model_name': model_name,
         'search_type': search_type,
         'best_params': best_params,
-        'best_score': best_score,
-        'best_model': search.best_estimator_,
+        'best_cv_score': best_score,
+        'holdout_val_score': val_score,
+        'best_model': best_model,
         'elapsed_time': elapsed_time,
         'cv_results': search.cv_results_
     }
 
 
-def compare_all_models(results_list):
+def compare_all_models(results_list, scoring):
     """Create a comparison table for all models."""
     comparison_df = pd.DataFrame([
         {
             'Model': r['model_name'],
-            'Best Score': f"{r['best_score']:.4f}",
+            f'Best CV Score ({scoring})': f"{r['best_cv_score']:.4f}",
+            f'Holdout Score ({scoring})': f"{r['holdout_val_score']:.4f}",
             'Tiempo (s)': f"{r['elapsed_time']:.2f}",
             'Parameters': len(r['best_params'])
         }
         for r in results_list
     ])
     
-    # Sort by score (convert to float temporarily)
+    # Sort by holdout score
     comparison_df_sort = comparison_df.copy()
-    comparison_df_sort['Best Score'] = comparison_df_sort['Best Score'].astype(float)
-    comparison_df_sort = comparison_df_sort.sort_values('Best Score', ascending=False)
+    comparison_df_sort[f'Holdout Score ({scoring})'] = comparison_df_sort[f'Holdout Score ({scoring})'].astype(float)
+    comparison_df_sort = comparison_df_sort.sort_values(f'Holdout Score ({scoring})', ascending=False)
     comparison_df = comparison_df.loc[comparison_df_sort.index]
     
     print(f"\n{'='*80}")
@@ -201,8 +215,8 @@ def compare_all_models(results_list):
     
     return comparison_df
 
-def save_best_models(results_list):
-    """Save tuned models for later reference."""
+def save_best_models_summary(results_list):
+    """Save tuned models summary for later reference."""
     best_model_info = {
         'timestamp': datetime.now().isoformat(),
         'models': []
@@ -211,23 +225,29 @@ def save_best_models(results_list):
     for r in results_list:
         model_info = {
             'name': r['model_name'],
-            'best_score': float(r['best_score']),
+            'best_cv_score': float(r['best_cv_score']),
+            'holdout_val_score': float(r['holdout_val_score']),
             'elapsed_time': float(r['elapsed_time']),
             'best_params': {str(k).replace('model__', ''): str(v) for k, v in r['best_params'].items()}
         }
         best_model_info['models'].append(model_info)
-        
-        # Save model in MLflow
-        mlflow.sklearn.log_model(r['best_model'], f"{r['model_name']}_best_model")
     
     # Save JSON summary
     json_path = f"{RESULTS_DIR}/best_models_summary.json"
     with open(json_path, 'w') as f:
         json.dump(best_model_info, f, indent=2)
     
-    print(f"  ✓ Models saved to: {json_path}")
+    print(f"  Models summary saved to: {json_path}")
 
 def main():
+    parser = argparse.ArgumentParser(description="Hyperparameter tuning with HalvingGridSearchCV")
+    parser.add_argument("--models", nargs="+", 
+                        default=['LogisticRegression', 'RandomForest', 'XGBoost', 'SVM', 'KNN'],
+                        help="List of models to tune (e.g., --models XGBoost RandomForest)")
+    parser.add_argument("--scoring", type=str, default="f1_macro",
+                        help="Scoring metric to use for evaluation (default: f1_macro)")
+    args = parser.parse_args()
+    
     print("\n" + "="*80)
     print("  HYPERPARAMETER TUNING - MULTIPLE MODELS")
     print("="*80)
@@ -235,39 +255,51 @@ def main():
     # Load data
     print("\n1. Loading data...")
     data = Dataset()
-    X_train, y_train, _ = data.load_data_xy()
-    print(f"   ✓ X_train shape: {X_train.shape}")
-    print(f"   ✓ y_train shape: {y_train.shape}")
-    print(f"   ✓ Classes: {np.unique(y_train)}")
+    X, y, _ = data.load_data_xy()
+    
+    # Create holdout validation set
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
+    )
+    
+    print(f"   X_train shape: {X_train.shape}")
+    print(f"   y_train shape: {y_train.shape}")
+    print(f"   X_val shape: {X_val.shape}")
+    print(f"   y_val shape: {y_val.shape}")
+    print(f"   Classes: {np.unique(y_train)}")
     
     # Configure MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URL)
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
     
-    # List of models to tune
-    models_to_tune = ['LogisticRegression', 'RandomForest', 'XGBoost', 'SVM', 'KNN']
-    
     results = []
     
-    print("\n2. Starting hyperparameter tuning...")
-    for model_name in models_to_tune:
-        result = tune_model(model_name, X_train, y_train)
+    print(f"\n2. Starting hyperparameter tuning for models: {args.models}...")
+    for model_name in args.models:
+        if model_name not in PARAM_GRIDS:
+            print(f"Warning: Model '{model_name}' not found in PARAM_GRIDS. Skipping.")
+            continue
+        result = tune_model(model_name, X_train, y_train, X_val, y_val, args.scoring)
         results.append(result)
     
+    if not results:
+        print("No models were tuned. Exiting.")
+        return
+        
     # Final comparison
     print("\n3. Generating comparison summary...")
-    comparison = compare_all_models(results)
+    comparison = compare_all_models(results, args.scoring)
     
     # Save complete results
     print("\n4. Saving results...")
-    save_best_models(results)
+    save_best_models_summary(results)
     
-    print(f"\n✓ IMPLEMENTATION COMPLETED")
+    print(f"\n IMPLEMENTATION COMPLETED")
     print(f"\nResults saved in: {RESULTS_DIR}/")
     print(f"  - comparison_summary.csv")
     print(f"  - best_models_summary.json")
     print(f"  - *_cv_results.csv (per model)")
-    print(f"\n✓ Experiments logged in MLflow at: {MLFLOW_TRACKING_URL}")
+    print(f"\n Experiments logged in MLflow at: {MLFLOW_TRACKING_URL}")
     print(f"  Experiment: {MLFLOW_EXPERIMENT_NAME}")
     
     return results, comparison
