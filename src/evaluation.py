@@ -44,27 +44,40 @@ class ModelEvaluation:
         :param model: the model to evaluate
         :return: the accuracy score
         """
-        #print("Model Type", type(model).__name__ + '_' + self.tag)
+        
+        from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
         model_type = type(model.named_steps['model']).__name__
-        print(f"Model Type: {model_type}")
+        print(f"\n=============================================")
+        print(f"Evaluando Modelo: {model_type}")
+        print(f"=============================================")
+        
         model.fit(self.X_train, self.y_train)
         y_pred = model.predict(self.X_valid)
+        
+        # 1. Calculamos el accuracy básico
         acc = accuracy_score(y_true=self.y_valid, y_pred=y_pred)
-        print(f"{model_type}: accuracy score: {acc:.2f}")
+        print(f"Accuracy General: {acc:.4f}\n")
 
+        # 2. MEJORA: Reporte de Clasificación Detallado
+        print("--- Reporte de Clasificación ---")
+        reporte = classification_report(self.y_valid, y_pred)
+        print(reporte)
+
+        # 3. MEJORA: Matriz de Confusión Visual (Opcional, guardada como imagen)
+        
+        cm = confusion_matrix(self.y_valid, y_pred)
+        plt.figure(figsize=(6,4))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title(f'Matriz de Confusión - {model_type}')
+        plt.ylabel('Etiqueta Real')
+        plt.xlabel('Predicción')
+        #plt.savefig(f'confusion_matrix_{model_type}.png') # Guarda la imagen en tu carpeta
+        plt.show()
+
+        
         # log parameters and metrics in MLFlow
         model_name = type(model).__name__ + '_' + self.tag
-        log_param(f"Model Type", type(model).__name__ + '_' + self.tag)
-        for hyperparameter, value in model.get_params().items():
-            log_param(hyperparameter, value)
-        log_metric("accuracy_score", acc)
-
-        # Signature (avoid int for signature warning)
-        X_sig = self.X_train.copy()
-        int_cols = X_sig.select_dtypes(include=["int64", "int32"]).columns
-        if len(int_cols) > 0:
-            X_sig[int_cols] = X_sig[int_cols].astype("float64")
-        signature = infer_signature(X_sig, model.predict(X_sig))
-        mlflow.sklearn.log_model(model, name=model_name, signature=signature, registered_model_name=None)
-
-        return acc
+        # ...
