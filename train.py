@@ -32,7 +32,7 @@ def main():
 
 
     
-    # 2. TU CONTRIBUCIÓN: Modelo XGBoost
+    # 2. CONTRIBUCIÓN: Modelo XGBoost
     
     pipeline_xgb = Pipeline(
         [
