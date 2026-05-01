@@ -3,10 +3,11 @@ Hyperparameter tuning for multiple models.
 HalvingGridSearchCV for RandomForest, XGBoost, SVM, LogisticRegression, and KNN.
 """
 
+import warnings
 import pandas as pd
 import numpy as np
+from sklearn.experimental import enable_halving_search_cv
 from sklearn.model_selection import HalvingGridSearchCV, StratifiedKFold, train_test_split
-from sklearn.experimental import enable_halving_search_cv  # noqa
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -105,7 +106,7 @@ def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
     models = {
         'LogisticRegression': LogisticRegression(random_state=RANDOM_STATE, max_iter=5000),
         'RandomForest': RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1),
-        'XGBoost': xgb.XGBClassifier(random_state=RANDOM_STATE, n_jobs=-1, eval_metric='mlogloss', verbose=0),
+        'XGBoost': xgb.XGBClassifier(random_state=RANDOM_STATE, n_jobs=-1, eval_metric='mlogloss', verbosity=0),
         'SVM': SVC(random_state=RANDOM_STATE),
         'KNN': KNeighborsClassifier(n_jobs=-1)
     }
@@ -135,7 +136,7 @@ def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
         
         # Run search
         start_time = time.time()
-        print(f"\n  Iniciando {search_type} con {CV_FOLDS} folds...")
+        print(f"\n  Starting {search_type} with {CV_FOLDS} folds...")
         search.fit(X_train, y_train)
         elapsed_time = time.time() - start_time
         
@@ -144,7 +145,7 @@ def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
         best_score = search.best_score_
         best_model = search.best_estimator_
 
-        print(f"Mejor score CV ({scoring}): {best_score:.4f}")
+        print(f"Best CV score ({scoring}): {best_score:.4f}")
         print(f"\nBest parameters:")
         for param, value in best_params.items():
             print(f"{param}: {value}")
@@ -156,10 +157,13 @@ def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
         val_score = scorer(best_model, X_val, y_val)
         print(f"Holdout Validation Score ({scoring}): {val_score:.4f}")
         
-        # Log metrics
-        mlflow.log_metric("best_cv_score", best_score)
-        mlflow.log_metric("holdout_val_score", val_score)
-        mlflow.log_metric("elapsed_time_seconds", elapsed_time)
+        # Log metrics safely
+        import math
+        if not math.isnan(best_score):
+            mlflow.log_metric("final_best_cv_score", best_score)
+        if not math.isnan(val_score):
+            mlflow.log_metric("final_holdout_score", val_score)
+        mlflow.log_metric("final_elapsed_time_sec", elapsed_time)
         
         # Log full results as an artifact
         results_df = pd.DataFrame(search.cv_results_)
@@ -168,7 +172,13 @@ def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
         mlflow.log_artifact(results_path)
         
         # Log model inside the correct MLflow run
-        mlflow.sklearn.log_model(best_model, f"{model_name}_best_model")
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Saving scikit-learn models in the pickle or cloudpickle format",
+                category=FutureWarning,
+            )
+            mlflow.sklearn.log_model(best_model, name=f"{model_name}_best_model")
         
         print(f"  Results and model logged in MLflow (run_id: {mlflow.active_run().info.run_id})")
         
@@ -191,7 +201,7 @@ def compare_all_models(results_list, scoring):
             'Model': r['model_name'],
             f'Best CV Score ({scoring})': f"{r['best_cv_score']:.4f}",
             f'Holdout Score ({scoring})': f"{r['holdout_val_score']:.4f}",
-            'Tiempo (s)': f"{r['elapsed_time']:.2f}",
+            'Time (s)': f"{r['elapsed_time']:.2f}",
             'Parameters': len(r['best_params'])
         }
         for r in results_list
@@ -211,7 +221,7 @@ def compare_all_models(results_list, scoring):
     # Save table
     comparison_path = f"{RESULTS_DIR}/comparison_summary.csv"
     comparison_df.to_csv(comparison_path, index=False)
-    print(f"\n  ✓ Resumen guardado en: {comparison_path}")
+    print(f"\n  ✓ Summary saved to: {comparison_path}")
     
     return comparison_df
 
@@ -257,6 +267,21 @@ def main():
     data = Dataset()
     X, y, _ = data.load_data_xy()
     
+    # Remove classes with fewer than CV_FOLDS samples to prevent CV and XGBoost failures
+    class_counts = pd.Series(y).value_counts()
+    valid_classes = class_counts[class_counts >= CV_FOLDS].index
+    if len(valid_classes) < len(class_counts):
+        print(f"   Warning: Dropping classes with fewer than {CV_FOLDS} samples: {set(class_counts.index) - set(valid_classes)}")
+        mask = np.isin(y, valid_classes)
+        X = X[mask]
+        y = y[mask]
+        
+    # Remap remaining classes to be strictly sequential (0, 1, 2...) for XGBoost compatibility
+    from sklearn.preprocessing import LabelEncoder
+    le = LabelEncoder()
+    y = le.fit_transform(y)
+    print(f"   Remapped valid classes to sequential indices: {np.unique(y)}")
+        
     # Create holdout validation set
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
