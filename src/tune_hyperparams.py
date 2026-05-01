@@ -1,13 +1,12 @@
 """
 Hyperparameter tuning for multiple models.
-HalvingGridSearchCV for RandomForest, XGBoost, SVM, LogisticRegression, and KNN.
+GridSearchCV for RandomForest, XGBoost, SVM, LogisticRegression, and KNN.
 """
 
 import warnings
 import pandas as pd
 import numpy as np
-from sklearn.experimental import enable_halving_search_cv
-from sklearn.model_selection import HalvingGridSearchCV, StratifiedKFold, train_test_split
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -29,6 +28,16 @@ import argparse
 RANDOM_STATE = 42
 CV_FOLDS = 5
 RESULTS_DIR = 'tuning_results'
+
+# XGBoost and RandomForest use fewer folds to avoid crashes on rare/small classes.
+# Other models keep CV_FOLDS (5) for a more robust estimate.
+MODEL_CV_FOLDS = {
+    'LogisticRegression': CV_FOLDS,
+    'RandomForest': 2,
+    'XGBoost': 2,
+    'SVM': CV_FOLDS,
+    'KNN': CV_FOLDS,
+}
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -83,7 +92,7 @@ def build_pipeline(model_instance):
     ])
     return pipeline
 
-def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
+def tune_model(model_name, X_train, y_train, X_val, y_val, scoring, cv_folds=CV_FOLDS):
     """
     Tune hyperparameters for a single model using HalvingGridSearchCV.
 
@@ -101,42 +110,65 @@ def tune_model(model_name, X_train, y_train, X_val, y_val, scoring):
     print(f"\n{'='*80}")
     print(f"  TUNING: {model_name}")
     print(f"{'='*80}")
-    
-    # Select model
+
+    # --- Per-model class filtering ---
+    # Drop classes that have fewer samples than required for this model's cv_folds.
+    # This is done per-model so a 5-fold model (LR, SVM, KNN) drops rare classes
+    # that a 2-fold model (XGBoost, RF) would keep.
+    from sklearn.preprocessing import LabelEncoder
+    class_counts_train = pd.Series(y_train).value_counts()
+    valid_classes = class_counts_train[class_counts_train >= cv_folds].index
+    if len(valid_classes) < len(class_counts_train):
+        dropped = set(class_counts_train.index) - set(valid_classes)
+        print(f"   [{model_name}] Dropping classes with < {cv_folds} train samples: {dropped}")
+        mask_tr = np.isin(y_train, valid_classes)
+        X_train, y_train = X_train[mask_tr], y_train[mask_tr]
+        mask_val = np.isin(y_val, valid_classes)
+        X_val, y_val = X_val[mask_val], y_val[mask_val]
+
+    # Re-encode surviving classes as 0-based sequential integers (required by XGBoost).
+    le = LabelEncoder()
+    y_train = le.fit_transform(y_train)
+    y_val   = le.transform(y_val)
+    n_classes = len(le.classes_)
+    print(f"   [{model_name}] Classes after filtering: {le.classes_} → encoded as {np.unique(y_train)}")
+
+    # --- Model + search setup ---
     models = {
         'LogisticRegression': LogisticRegression(random_state=RANDOM_STATE, max_iter=5000),
         'RandomForest': RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1),
         'XGBoost': xgb.XGBClassifier(random_state=RANDOM_STATE, n_jobs=-1, eval_metric='mlogloss', verbosity=0),
-        'SVM': SVC(random_state=RANDOM_STATE),
+        'SVM': SVC(random_state=RANDOM_STATE, probability=True),  # probability=True enables predict_proba via Platt scaling
         'KNN': KNeighborsClassifier(n_jobs=-1)
     }
-    
+
     model_instance = models[model_name]
     pipeline = build_pipeline(model_instance)
     param_grid = PARAM_GRIDS[model_name]
-    
-    cv_strategy = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
-    
-    search = HalvingGridSearchCV(
+
+    cv_strategy = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=RANDOM_STATE)
+
+    search = GridSearchCV(
         pipeline,
         param_grid=param_grid,
         cv=cv_strategy,
         scoring=scoring,
         n_jobs=-1,
         verbose=1,
-        random_state=RANDOM_STATE,
-        factor=3
+        error_score=np.nan,   # tolerate individual fold failures instead of crashing
     )
-    search_type = "HalvingGridSearchCV"
-    
+    search_type = "GridSearchCV"
+
     with mlflow.start_run(run_name=f"{model_name}_tuning"):
         # Log basic config
         mlflow.log_param("search_type", search_type)
         mlflow.log_param("scoring", scoring)
-        
+        mlflow.log_param("cv_folds", cv_folds)
+        mlflow.log_param("n_classes", n_classes)
+
         # Run search
         start_time = time.time()
-        print(f"\n  Starting {search_type} with {CV_FOLDS} folds...")
+        print(f"\n  Starting {search_type} with {cv_folds} folds...")
         search.fit(X_train, y_train)
         elapsed_time = time.time() - start_time
         
@@ -267,20 +299,9 @@ def main():
     data = Dataset()
     X, y, _ = data.load_data_xy()
     
-    # Remove classes with fewer than CV_FOLDS samples to prevent CV and XGBoost failures
-    class_counts = pd.Series(y).value_counts()
-    valid_classes = class_counts[class_counts >= CV_FOLDS].index
-    if len(valid_classes) < len(class_counts):
-        print(f"   Warning: Dropping classes with fewer than {CV_FOLDS} samples: {set(class_counts.index) - set(valid_classes)}")
-        mask = np.isin(y, valid_classes)
-        X = X[mask]
-        y = y[mask]
-        
-    # Remap remaining classes to be strictly sequential (0, 1, 2...) for XGBoost compatibility
-    from sklearn.preprocessing import LabelEncoder
-    le = LabelEncoder()
-    y = le.fit_transform(y)
-    print(f"   Remapped valid classes to sequential indices: {np.unique(y)}")
+    # Class filtering and label encoding are now done per-model inside tune_model()
+    # so that each model uses its own cv_folds threshold.  No global remapping needed.
+    print(f"   Raw class distribution: {dict(pd.Series(y).value_counts().sort_index())}")
         
     # Create holdout validation set
     X_train, X_val, y_train, y_val = train_test_split(
@@ -304,7 +325,9 @@ def main():
         if model_name not in PARAM_GRIDS:
             print(f"Warning: Model '{model_name}' not found in PARAM_GRIDS. Skipping.")
             continue
-        result = tune_model(model_name, X_train, y_train, X_val, y_val, args.scoring)
+        model_folds = MODEL_CV_FOLDS.get(model_name, CV_FOLDS)
+        print(f"   (Using {model_folds}-fold CV for {model_name})")
+        result = tune_model(model_name, X_train, y_train, X_val, y_val, args.scoring, cv_folds=model_folds)
         results.append(result)
     
     if not results:
