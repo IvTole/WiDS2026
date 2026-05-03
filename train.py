@@ -22,6 +22,36 @@ def main():
         ]
     )
 
+    # --- CONTRIBUCIÓN CECILIA: VALIDACIÓN CRUZADA ---
+    print("\n--- Iniciando Validación Cruzada Estratificada ---")
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+    import numpy as np
+    
+    # 1. Usamos StratifiedKFold para mantener la proporción de las clases
+    # Bajamos a cv=3 porque tienes clases con muy pocos miembros (solo 3)
+    skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+    
+    # 2. Cambiamos la métrica a 'roc_auc_ovr' (One-vs-Rest) para soportar multiclase
+    try:
+        cv_scores = cross_val_score(
+            pipeline_lr, 
+            X_train, 
+            y_train, 
+            cv=skf, 
+            scoring='roc_auc_ovr' # 'ovr' soluciona el error multi_class
+        )
+        
+        print(f"Scores ROC-AUC (OVR) por fold: {cv_scores}")
+        print(f"Promedio ROC-AUC: {np.mean(cv_scores):.4f} (+/- {np.std(cv_scores):.4f})")
+    except Exception as e:
+        print(f"Nota: No se pudo calcular ROC-AUC debido al desbalance extremo. Error: {e}")
+        # Si falla el AUC por las clases pequeñas, usamos Accuracy como respaldo
+        cv_scores = cross_val_score(pipeline_lr, X_train, y_train, cv=skf, scoring='accuracy')
+        print(f"Scores Accuracy por fold: {cv_scores}")
+        print(f"Promedio Accuracy: {np.mean(cv_scores):.4f}")
+    
+    print("-------------------------------------------\n")
+
     # Evaluate Models
     ev = ModelEvaluation(X=X_train, y=y_train, tag='lr')
     ev.evaluate_model(pipeline_lr)
