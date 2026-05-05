@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 # External modules
 from src.config import train_data_path, test_data_path
-from src.config import FEATURE_COLUMNS, COL_EVENT, COL_TIME_TO_HIT_HOURS, COL_EVENT_ID
+from src.config import FEATURE_COLUMNS, COL_EVENT, COL_TIME_TO_HIT_HOURS, COL_EVENT_ID,COL_CENTROID_SPEED_M_PER_H, COL_ALIGNMENT_COS, COL_EFFECTIVE_THREAT_VELOCITY
 from src.config import TIME_BINS_HOURS, N_CLASSES, CENSORED_CLASS
 from src.targets import make_multiclass_labels
 
@@ -43,6 +43,11 @@ class Dataset:
         """
 
         df_train, df_test = self.load_data()
+
+        for df in [df_train, df_test]:
+            df[COL_EFFECTIVE_THREAT_VELOCITY] = (
+                    df[COL_CENTROID_SPEED_M_PER_H] * df[COL_ALIGNMENT_COS]
+            ).clip(lower=0)
 
         # Labels creation, categorical (y_12h, y_24h, y_48h, y_72h)
         y_train = make_multiclass_labels(df=df_train,
