@@ -40,6 +40,7 @@ def test_data_path() -> Path:
         
 # Feature columns
 COL_EVENT_ID = "event_id"
+"""
 COL_NUM_PERIMETERS_0_5H = "num_perimeters_0_5h"
 COL_DT_FIRST_LAST_0_5H = "dt_first_last_0_5h"
 COL_LOW_TEMPORAL_RESOLUTION_0_5H = "low_temporal_resolution_0_5h"
@@ -74,7 +75,8 @@ COL_ALONG_TRACK_SPEED = "along_track_speed"
 COL_EVENT_START_HOUR = "event_start_hour"
 COL_EVENT_START_DAYOFWEEK = "event_start_dayofweek"
 COL_EVENT_START_MONTH = "event_start_month"
-
+"""
+"""
 FEATURE_COLUMNS = [
     COL_NUM_PERIMETERS_0_5H,
     COL_DT_FIRST_LAST_0_5H,
@@ -110,8 +112,10 @@ FEATURE_COLUMNS = [
     COL_EVENT_START_DAYOFWEEK,
     COL_EVENT_START_MONTH,
 ]
+"""
 
 # Column groups for preprocessing
+"""
 NUMERIC_COLS = [
     COL_NUM_PERIMETERS_0_5H,
     COL_DT_FIRST_LAST_0_5H,
@@ -143,13 +147,15 @@ NUMERIC_COLS = [
     COL_EVENT_START_DAYOFWEEK,
     COL_EVENT_START_MONTH,
 ]
-
+"""
+"""
 PASSTHROUGH_COLS = [
     COL_LOW_TEMPORAL_RESOLUTION_0_5H,
     COL_SPREAD_BEARING_SIN,
     COL_SPREAD_BEARING_COS,
     COL_ALIGNMENT_COS,
 ]
+"""
 
 # Target columns
 COL_TIME_TO_HIT_HOURS = "time_to_hit_hours"
