@@ -54,7 +54,7 @@ CENSORED_CLASS = 3
 MLFLOW_TRACKING_URL = "http://mlflow.vanotole-lab.com"
 MLFLOW_EXPERIMENT_NAME = "WiDS2026"
 
-"""FEATURE_COLUMNS = [
+FEATURE_COLUMNS = [
     "num_perimeters_0_5h",
     "dt_first_last_0_5h",
     "low_temporal_resolution_0_5h",
@@ -89,4 +89,3 @@ MLFLOW_EXPERIMENT_NAME = "WiDS2026"
     "event_start_dayofweek",
     "event_start_month"
 ]
-"""
