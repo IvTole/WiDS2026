@@ -3,9 +3,10 @@ from typing import Optional, Tuple
 
 # External modules
 from src.config import train_data_path, test_data_path
-from src.config import FEATURE_COLUMNS, COL_EVENT, COL_TIME_TO_HIT_HOURS, COL_EVENT_ID
+from src.config import COL_EVENT, COL_TIME_TO_HIT_HOURS, COL_EVENT_ID
 from src.config import TIME_BINS_HOURS, N_CLASSES, CENSORED_CLASS
 from src.targets import make_multiclass_labels
+
 
 class Dataset:
 
