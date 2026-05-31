@@ -8,36 +8,18 @@ os.environ["MLFLOW_TRACKING_URI"] = "http://mlflow.vanotole-lab.com"
 os.environ["MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD"] = "false"
 
 # Paths
-def train_data_path() -> Path:
-    """
-    Returns the location of train data directory, allowing for script executions in subfolders without worrying about the
-    relative location of the data
-
-    :return: the path to the train data directory
-    """
+def _find_data_file(filename: str) -> Path:
     cwd = Path.cwd()
-    for folder in (cwd, cwd / "..", cwd / ".." / ".."):
-        data_folder = folder / "data" / "train.csv"
-        if data_folder.exists() and data_folder.is_file():
-            print("Train data directory found in ", data_folder)
-            return data_folder
-    raise Exception("Train data not found")
-        
-def test_data_path() -> Path:
-    """
-    Returns the location of test data directory, allowing for script executions in subfolders without worrying about the
-    relative location of the data
+    for folder in (cwd, cwd / '..', cwd / '..' / '..'):
+        path = folder /'data' / filename
+        if path.exits():
+            return path
+    raise FileNotFoundError(f'{filename} not found')
 
-    :return: the path to the test data directory
-    """
-    cwd = Path.cwd()
-    for folder in (cwd, cwd / "..", cwd / ".." / ".."):
-        data_folder = folder / "data" / "test.csv"
-        if data_folder.exists() and data_folder.is_file():
-            print("Test data directory found in ", data_folder)
-            return data_folder
-    raise Exception("Test data not found")
-        
+def train_data_path() -> Path: return _find_data_file('train.csv')
+def test_data_path() -> Path: return _find_data_file('test.csv')
+
+   
 # Feature columns
 COL_EVENT_ID = "event_id"
 
