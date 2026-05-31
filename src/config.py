@@ -19,7 +19,6 @@ def _find_data_file(filename: str) -> Path:
 def train_data_path() -> Path: return _find_data_file('train.csv')
 def test_data_path() -> Path: return _find_data_file('test.csv')
 
-   
 # Feature columns
 COL_EVENT_ID = "event_id"
 

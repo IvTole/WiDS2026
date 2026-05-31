@@ -35,7 +35,7 @@ NUMERIC_COLS = [
 ]
 
 PASSTHROUGH_COLS = [
-    "low_temporal_resolution",
+    "low_temporal_resolution_0_5h",
     "spread_bearing_sin",
     "spread_bearing_cos",
     "alignment_cos"
