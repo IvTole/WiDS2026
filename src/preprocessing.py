@@ -1,6 +1,45 @@
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from src.config import NUMERIC_COLS, PASSTHROUGH_COLS
+
+
+NUMERIC_COLS = [
+    "num_perimeters_0_5h",
+    "dt_first_last_0_5h",
+    "area_first_ha",
+    "area_growth_abs_0_5h",
+    "area_growth_rel_0_5h",
+    "area_growth_rate_ha_per_h",
+    "log1p_area_first",
+    "log1p_growth",
+    "log_area_ratio_0_5h",
+    "relative_growth_0_5h",
+    "radial_growth_m",
+    "radial_growth_rate_m_per_h",
+    "centroid_displacement_m",
+    "centroid_speed_m_per_h",
+    "dist_min_ci_0_5h",
+    "dist_std_ci_0_5h",
+    "dist_change_ci_0_5h",
+    "dist_slope_ci_0_5h",
+    "closing_speed_m_per_h",
+    "closing_speed_abs_m_per_h",
+    "projected_advance_m",
+    "dist_accel_m_per_h2",
+    "dist_fit_r2_0_5h",
+    "alignment_abs",
+    "cross_track_component",
+    "along_track_speed",
+    "event_start_hour",
+    "event_start_dayofweek",
+    "event_start_month"
+]
+
+PASSTHROUGH_COLS = [
+    "low_temporal_resolution_0_5h",
+    "spread_bearing_sin",
+    "spread_bearing_cos",
+    "alignment_cos"
+]
 
 def build_preprocessor() -> ColumnTransformer:
 
